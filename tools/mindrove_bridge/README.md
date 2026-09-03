@@ -37,6 +37,11 @@ argument. It reads the passphrase from the environment variable `MINDROVE_PSK`
 or, when absent, from a hidden `getpass` prompt. Do not pass secrets through a
 provider specification or shell command line.
 
+GUI launchers can instead pass `--psk-stdin`, write the exact UTF-8 passphrase
+bytes to the bridge's standard input, and close the pipe. This mode takes
+precedence over the environment and hidden prompt. It does not trim input, so a
+trailing newline is part of the passphrase.
+
 Active station mode fails closed unless the SSID begins with `MindRove` and the
 target is on the FCC/US 2.4-GHz channel plan (channels 1–11). Do not transmit it
 under another regulatory domain without first reviewing that domain's channel

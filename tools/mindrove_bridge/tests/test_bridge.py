@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import io
 import struct
 from types import SimpleNamespace
 import unittest
@@ -21,7 +22,11 @@ from mindrove_station.management import (
 )
 from mindrove_station.security import build_rsn_element
 
-from tools.mindrove_bridge.cli import build_parser
+from tools.mindrove_bridge.cli import (
+    _load_cli_passphrase,
+    _read_stdin_passphrase,
+    build_parser,
+)
 from tools.mindrove_bridge.config import BridgeConfig, SecretValue, load_passphrase
 from tools.mindrove_bridge.radio import (
     RF18_BAND_5GHZ,
@@ -137,6 +142,59 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(secret.reveal(), b"correct horse")
         secret.clear()
         self.assertEqual(secret.reveal(), b"\x00" * len(b"correct horse"))
+
+    def test_psk_stdin_takes_precedence_without_trimming(self):
+        args = build_parser().parse_args(
+            [
+                "--ssid",
+                SSID,
+                "--bssid",
+                "10:20:30:40:50:60",
+                "--channel",
+                "6",
+                "--psk-env",
+                "SAFE_NAME",
+                "--psk-stdin",
+            ]
+        )
+        secret = _load_cli_passphrase(
+            args,
+            stdin=io.BytesIO(b"pipe secret\n"),
+            environment={"SAFE_NAME": "environment secret"},
+            prompt=lambda _prompt: self.fail("prompt should not be called"),
+        )
+        self.assertEqual(secret.reveal(), b"pipe secret\n")
+        secret.clear()
+
+    def test_psk_stdin_rejects_overlong_input_and_wipes_buffer(self):
+        class TrackingReader:
+            def __init__(self, value: bytes) -> None:
+                self.value = value
+                self.offset = 0
+                self.raw_buffer: bytearray | None = None
+
+            def readinto(self, destination: memoryview) -> int:
+                buffer = destination.obj
+                if not isinstance(buffer, bytearray):
+                    raise TypeError("expected the bridge's mutable credential buffer")
+                self.raw_buffer = buffer
+                count = min(len(destination), len(self.value) - self.offset)
+                destination[:count] = self.value[self.offset : self.offset + count]
+                self.offset += count
+                return count
+
+        stream = TrackingReader(b"s" * 64)
+        with self.assertRaisesRegex(ValueError, "exceeds 63"):
+            _read_stdin_passphrase(stream)
+        self.assertIsNotNone(stream.raw_buffer)
+        self.assertEqual(stream.raw_buffer, bytearray(64))
+
+    def test_psk_stdin_rejects_invalid_utf8_without_echoing_input(self):
+        raw_secret = b"validpart\xff"
+        with self.assertRaises(ValueError) as raised:
+            _read_stdin_passphrase(io.BytesIO(raw_secret))
+        self.assertNotIn(repr(raw_secret), str(raised.exception))
+        self.assertIn("not valid UTF-8", str(raised.exception))
 
     def test_config_requires_loopback(self):
         with self.assertRaisesRegex(ValueError, "loopback"):

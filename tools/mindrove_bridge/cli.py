@@ -5,17 +5,22 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import getpass
 import os
 import secrets
 import sys
-from typing import Optional, Sequence
+from typing import Callable, Mapping, Optional, Protocol, Sequence, cast
 
 from mindrove_station.common import mac_bytes
 
-from .config import BridgeConfig, DEFAULT_PSK_ENV, load_passphrase
+from .config import BridgeConfig, DEFAULT_PSK_ENV, SecretValue, load_passphrase
 from .radio import Wifit3StationRadio
 from .session import AssociationError, LoopbackUdpSink, StationOrchestrator
 from .wpa2_provider import DefaultWPA2Handshake
+
+
+class _BinaryReadInto(Protocol):
+    def readinto(self, buffer: memoryview) -> Optional[int]: ...
 
 
 def _channel(value: str) -> int:
@@ -73,6 +78,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="environment variable containing the passphrase; hidden prompt if absent",
     )
     parser.add_argument(
+        "--psk-stdin",
+        action="store_true",
+        help=(
+            "read the exact UTF-8 passphrase bytes from standard input until EOF; "
+            "takes precedence over --psk-env and the hidden prompt"
+        ),
+    )
+    parser.add_argument(
         "--handshake-timeout",
         default=8.0,
         type=float,
@@ -87,6 +100,60 @@ def _local_station_mac() -> bytes:
     return bytes((0x02,)) + secrets.token_bytes(5)
 
 
+def _read_stdin_passphrase(stream: _BinaryReadInto) -> SecretValue:
+    """Read one bounded UTF-8 credential and erase the mutable input buffer."""
+
+    # One extra octet distinguishes a valid 63-octet passphrase ending at EOF
+    # from an overlong input without retaining an unbounded credential buffer.
+    raw = bytearray(64)
+    raw_view = memoryview(raw)
+    used = 0
+    try:
+        while used < len(raw):
+            destination = raw_view[used:]
+            try:
+                count = stream.readinto(destination)
+            finally:
+                destination.release()
+            if count is None:
+                raise OSError("standard input did not provide passphrase bytes")
+            if count == 0:
+                break
+            if count < 0 or count > len(raw) - used:
+                raise OSError("standard input returned an invalid byte count")
+            used += count
+
+        if used > 63:
+            raise ValueError("WPA2 passphrase exceeds 63 UTF-8 octets")
+        try:
+            value = raw_view[:used].tobytes().decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError(
+                "WPA2 passphrase from standard input is not valid UTF-8"
+            ) from None
+        return SecretValue(value)
+    finally:
+        raw_view.release()
+        for index in range(len(raw)):
+            raw[index] = 0
+
+
+def _load_cli_passphrase(
+    args: argparse.Namespace,
+    *,
+    stdin: _BinaryReadInto,
+    environment: Mapping[str, str],
+    prompt: Callable[[str], str] = getpass.getpass,
+) -> SecretValue:
+    if args.psk_stdin:
+        return _read_stdin_passphrase(stdin)
+    return load_passphrase(
+        environment=environment,
+        env_name=args.psk_env,
+        prompt=prompt,
+    )
+
+
 async def _run(args: argparse.Namespace) -> None:
     config = BridgeConfig.from_strings(
         ssid=args.ssid,
@@ -95,10 +162,16 @@ async def _run(args: argparse.Namespace) -> None:
         loopback_host=args.loopback_host,
         loopback_port=args.loopback_port,
     )
-    passphrase = load_passphrase(environment=os.environ, env_name=args.psk_env)
-    # Minimize the lifetime of a credential supplied through the environment.
-    # The default hidden prompt avoids placing it there at all.
-    os.environ.pop(args.psk_env, None)
+    try:
+        passphrase = _load_cli_passphrase(
+            args,
+            stdin=cast(_BinaryReadInto, sys.stdin.buffer),
+            environment=os.environ,
+        )
+    finally:
+        # Minimize the lifetime of a credential supplied through the environment,
+        # including when stdin takes precedence or validation fails.
+        os.environ.pop(args.psk_env, None)
     sink = None
     orchestrator = None
     try:
