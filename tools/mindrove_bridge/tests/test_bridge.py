@@ -261,8 +261,12 @@ class AsyncBridgeTests(unittest.IsolatedAsyncioTestCase):
         orchestrator = StationOrchestrator(radio, config)
 
         async def responses():
-            while driver.rx_callback is None:
+            while (
+                driver.rx_callback is None
+                or ("channel", 6, False) not in driver.calls
+            ):
                 await asyncio.sleep(0)
+            driver.calls.append("target-beacon")
             driver.rx_callback(Packet(target_beacon()))
             while len([c for c in driver.calls if isinstance(c, tuple) and c[0] == "tx"]) < 1:
                 await asyncio.sleep(0)
@@ -288,6 +292,15 @@ class AsyncBridgeTests(unittest.IsolatedAsyncioTestCase):
         exchange = await orchestrator.prepare(beacon_timeout=0.5)
         await feeder
         self.assertEqual(exchange.station_mac, STATION)
+        self.assertLess(
+            driver.calls.index("target-beacon"),
+            next(
+                index
+                for index, call in enumerate(driver.calls)
+                if isinstance(call, tuple) and call[0] == "active"
+            ),
+            "the target beacon must be validated before active-monitor mode",
+        )
         transmitted = [call[1] for call in driver.calls if isinstance(call, tuple) and call[0] == "tx"]
         association = parse_association_request(transmitted[1])
         self.assertEqual(association.header.receiver, BSSID)

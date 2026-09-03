@@ -34,6 +34,7 @@ from .radio import Wifit3StationRadio
 
 
 DEFAULT_RATES = (0x82, 0x84, 0x8B, 0x96, 0x0C, 0x12, 0x18, 0x24)
+DEFAULT_BEACON_TIMEOUT = 10.0
 
 
 class AssociationError(RuntimeError):
@@ -182,17 +183,24 @@ class StationOrchestrator:
         self.profile: Optional[AccessPointProfile] = None
         self.exchange: Optional[StationExchange] = None
 
-    async def prepare(self, *, beacon_timeout: float = 3.0) -> StationExchange:
+    async def prepare(
+        self, *, beacon_timeout: float = DEFAULT_BEACON_TIMEOUT
+    ) -> StationExchange:
         """Cold-connect, verify channel, activate MAC, and complete auth/assoc."""
         self._status("claiming exact USB adapter 0bda:c811")
         await self.radio.connect()
         self._status("radio firmware and MAC/BB/RF bring-up complete")
         await self.radio.tune_fixed(self.config.channel)
         self._status("2.4-GHz channel verified by RF18 readback")
-        await self.radio.activate_station()
-        self._status("target-only active station MAC enabled")
+        # A beacon is broadcast traffic and does not require the station MAC to
+        # be programmed.  Validate it while the adapter is still in the same
+        # passive-monitor state used by the target scanner.  Doing this before
+        # REG_MACID programming also separates target discovery failures from
+        # active-station authentication failures.
         profile = await self._wait_for_profile(beacon_timeout)
         self._status("target WPA2-PSK/CCMP beacon validated")
+        await self.radio.activate_station()
+        self._status("target-only active station MAC enabled")
         await self._authenticate(profile)
         await self._associate(profile)
         self._status("Open System authentication and WPA2 association complete")

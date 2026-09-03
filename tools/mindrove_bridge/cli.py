@@ -14,7 +14,7 @@ from mindrove_station.common import mac_bytes
 
 from .config import BridgeConfig, DEFAULT_PSK_ENV, load_passphrase
 from .radio import Wifit3StationRadio
-from .session import LoopbackUdpSink, StationOrchestrator
+from .session import AssociationError, LoopbackUdpSink, StationOrchestrator
 from .wpa2_provider import DefaultWPA2Handshake
 
 
@@ -132,6 +132,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         asyncio.run(_run(args))
     except KeyboardInterrupt:
         return 130
+    except AssociationError as exc:
+        # Association errors occur before the passphrase reaches the WPA2
+        # provider and contain only bridge-generated, non-secret diagnostics.
+        print(
+            "error: bridge stopped (%s: %s)" % (type(exc).__name__, exc),
+            file=sys.stderr,
+        )
+        return 1
     except Exception as exc:
         # Credential-handling code can fail with an exception that embeds its
         # input. Never echo exception text on this secret-bearing path.
