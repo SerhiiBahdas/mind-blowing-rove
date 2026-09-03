@@ -1,0 +1,2 @@
+# AES-CCM, AES-CMAC, and backend-independent authentication failure handling.
+cryptography>=44,<48

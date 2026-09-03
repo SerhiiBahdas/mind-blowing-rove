@@ -1,0 +1,7 @@
+# Immutable wifit3 v0.1.5 release commit; GPL-2.0-only. The bridge applies the
+# provenance-recorded c811 bt_coexist=False compatibility guard at runtime.
+-c constraints.txt
+wifit3 @ git+https://github.com/derv82/wifit3.git@e1f449c0248a8ad1d4080975ca0368d3f44d75d6
+
+# AES-CMAC, AES key unwrap, and AES-CCM for WPA2/CCMP.
+cryptography==47.0.0

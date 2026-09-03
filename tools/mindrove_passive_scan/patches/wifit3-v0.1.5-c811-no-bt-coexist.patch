@@ -1,0 +1,32 @@
+SPDX-License-Identifier: GPL-2.0-only
+Derived-from: Wifit3 v0.1.5, copyright its respective contributors
+Subject: [PATCH] rtl8821cu: skip BTC band notify on Wi-Fi-only boards
+
+Base: wifit3 v0.1.5
+Commit: e1f449c0248a8ad1d4080975ca0368d3f44d75d6
+Upstream: https://github.com/derv82/wifit3
+
+The 0bda:c811 board observed during the MindRove probe reports
+bt_coexist=False. Its bring-up correctly skips btc.hal_init, so no t.btc state
+exists. set_channel nevertheless calls the BTC band notifier unconditionally
+and crashes when that notifier dereferences t.btc. Match the existing bring-up
+gates and the vendor driver's Wi-Fi-only path.
+
+--- a/src/wifit3/chips/rtl8821cu_dkms/chan.py
++++ b/src/wifit3/chips/rtl8821cu_dkms/chan.py
+@@ -318,11 +318,13 @@ def set_channel(t, info, channel: int) -> None:
+     if _need_switch_band(t, channel):
+         t.thermal_reset_pending = True          # phy_set_bb_swing -> odm_clear_txpowertracking_state
+         if is_5g:
+-            btc.switchband_notify_5g(t)
++            if info.bt_coexist:
++                btc.switchband_notify_5g(t)
+             _switch_band_5g(t, central_ch)
+             _set_bb_swing_by_band_5g(t)
+         else:
+-            btc.switchband_notify_2g(t)
++            if info.bt_coexist:
++                btc.switchband_notify_2g(t)
+             _switch_band(t, info, central_ch)
+             _set_bb_swing_by_band_2g(t)
+     if is_5g:

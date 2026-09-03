@@ -1,0 +1,9 @@
+{
+  "name": "wifit3",
+  "repository": "https://github.com/derv82/wifit3.git",
+  "tag": "v0.1.5",
+  "commit": "e1f449c0248a8ad1d4080975ca0368d3f44d75d6",
+  "license": "GPL-2.0-only",
+  "rtl8821cuModule": "src/wifit3/chips/rtl8821cu_dkms",
+  "firmwareVendored": false
+}

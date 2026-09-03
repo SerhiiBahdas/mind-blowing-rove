@@ -1,0 +1,38 @@
+name: Hardware compatibility report
+description: Report a MindRove USB adapter without exposing a full system profile.
+title: "[hardware] "
+labels:
+  - hardware
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Run `make build && ./build/mindrove-usb-probe --json`. The probe intentionally excludes serial numbers, USB location IDs, interface names, SSIDs, IP addresses, and unrelated USB devices. Review the output before posting it.
+  - type: textarea
+    id: probe
+    attributes:
+      label: Probe JSON
+      description: Paste the complete output between triple backticks.
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Apple silicon generation (optional)
+      placeholder: M-series generation; omit the exact Mac model if preferred
+  - type: input
+    id: macos
+    attributes:
+      label: macOS major version (optional)
+      placeholder: Major version only
+  - type: input
+    id: hub
+    attributes:
+      label: Hub or adapter
+      placeholder: USB-C hub make/model, or direct connection
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Describe LEDs, hot-plug behavior, and any safe test already performed. Never post Wi-Fi credentials.

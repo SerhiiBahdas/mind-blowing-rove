@@ -1,0 +1,37 @@
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Python tooling and isolated bridge environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+.venv-*/
+
+# Local credentials and signing material
+.env
+.env.*
+*.key
+*.pem
+*.p12
+
+# Raw sensor/network data and local diagnostic artifacts
+*.csv
+*.tsv
+*.log
+*.pcap
+*.pcapng
+*.xdf
+*.edf
+*.bdf
+captures/
+logs/
+recordings/
+screenshots/
+Screenshot*.png
+codex-clipboard*

@@ -1,0 +1,4 @@
+# Immutable wifit3 v0.1.5 release commit; GPL-2.0-only. The scanner applies the
+# provenance-recorded c811 bt_coexist=False channel guard at runtime.
+-c ../mindrove_bridge/constraints.txt
+wifit3 @ git+https://github.com/derv82/wifit3.git@e1f449c0248a8ad1d4080975ca0368d3f44d75d6
